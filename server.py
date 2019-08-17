@@ -21,6 +21,7 @@ class Client(LineOnlyReceiver):
     ip: str
     login: str = None
 
+
     def connectionMade(self):
         """
         Обработчик нового клиента
@@ -33,7 +34,14 @@ class Client(LineOnlyReceiver):
         self.ip = self.transport.getPeer().host
         self.factory.clients.append(self)
 
-        self.sendLine("Welcome\n".encode())
+        self.sendLine("Welcome to the chat!\n".encode())  # отправляем сообщение клиенту
+
+        print(f"Client {self.ip} connected")  # отображаем сообщение в консоли сервера
+
+        for previous_message in self.factory.list_of_messages:
+            self.sendLine(previous_message.encode())
+
+
 
     def connectionLost(self, reason=connectionDone):
         """
@@ -76,14 +84,16 @@ class Client(LineOnlyReceiver):
                     print(notification)
                     self.factory.notify_all_users(notification)
                 else:
-                    warning_text = f"Login {self.login} is occupied, try another one\n"
+                    warning_text = f"Login {self.login} is occupied, try another one"
                     self.sendLine(warning_text.encode())
                     print(warning_text)
                     self.factory.clients.remove(self)
                     print(f"Client disconnected: {self.ip}")
+                    self.transport.loseConnection()
         else:
-            mes = f"{self.login}" + message
-            self.factory.notify_all_users(message)
+            mes = f"{self.login}: {message}"
+            self.factory.notify_all_users(mes)
+            print(mes)
 
 
 class Server(ServerFactory):
@@ -92,6 +102,7 @@ class Server(ServerFactory):
     clients: list
     protocol = Client
     list_of_clients: list
+    list_of_messages: list
 
     def __init__(self):
         """
@@ -103,12 +114,13 @@ class Server(ServerFactory):
 
         self.clients = []
         self.list_of_clients = []
+        self.list_of_messages = []
         print("Server started - OK")
 
     def startFactory(self):
         """Запуск прослушивания клиентов (уведомление в консоль)"""
 
-        print("Listening ...")
+        print("Start listening ...")
 
     def notify_all_users(self, message: str):
         """
@@ -116,8 +128,15 @@ class Server(ServerFactory):
         :param message: Текст сообщения
         """
 
+        if len(self.list_of_messages) < 10:
+            self.list_of_messages.append(message)
+        else:
+            self.list_of_messages.pop(0)
+            self.list_of_messages.append(message)
+
+        data = message.encode()  # закодируем текст в двоичное представление
         for user in self.clients:
-            user.sendLine(message.encode())
+            user.sendLine(data)
 
 
 if __name__ == '__main__':
