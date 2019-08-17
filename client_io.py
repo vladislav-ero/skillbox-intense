@@ -8,13 +8,13 @@
 
 from twisted.internet import reactor, stdio
 from twisted.internet.protocol import Protocol, ClientFactory
+import time
 
 
 class MessageHandler(Protocol):
     """Класс для работы параллельного ввода / вывода"""
 
     output = None
-    # output = input("Your message: ")
 
     def dataReceived(self, data: bytes):
         """Обработчик нового сообщения от сервера / ввода пользователя"""
@@ -26,15 +26,17 @@ class MessageHandler(Protocol):
 class User(MessageHandler):
     """Класс для отправки/обработки сообщений сервера"""
 
+    factory: 'Connector'
+
     def wrap(self):
         """Обработка ввода / вывода в терминале"""
 
-        handler = MessageHandler()
-        handler.output = self.transport
+        handler = MessageHandler()  # создаем промежуточный объект для работы с вводом/выводом в консоли
+        handler.output = self.transport  # назначем путь для вывода сообщений (на сервер)
 
-        wrapper = stdio.StandardIO(handler)
+        wrapper = stdio.StandardIO(handler)  # запускаем модуль Twisted для паралельного ввода и получения данных
 
-        self.output = wrapper
+        self.output = wrapper  # подставляем в текущий протокол (будет перехватывать по нажатию на Enter)
 
     def connectionMade(self):
         """
@@ -43,14 +45,16 @@ class User(MessageHandler):
         - посылаем логин на сервер
         - запускаем ввод/вывод
         """
-        self.send_message(f"login:{self.factory.login}")
-        self.wrap()
+        login_message = f"login:{self.factory.login}"  # формируем строку регистрации логина
+        self.send_message(login_message)  # отправляем на сервер
+
+        self.wrap()  # включаем режим ввода/вывода в консоли (чтобы отправлять сообщения нажатием Enter)
 
     def send_message(self, content: str):
         """Обаботчик отправки сообщения на сервер"""
 
-        content = f"{content}\n"
-        self.transport.write(content.encode())
+        data = f"{content}\n".encode()  # кодируем текст в двоичное представление
+        self.transport.write(data)  # отправляем на сервер
 
 
 class Connector(ClientFactory):
@@ -69,7 +73,7 @@ class Connector(ClientFactory):
     def startedConnecting(self, connector):
         """Обработчик установки соединения (выводим сообщение)"""
 
-        print("Successful connection")
+        print("Connecting to the server...\n")  # уведомление в консоли клиента
 
     def clientConnectionFailed(self, connector, reason):
         """Обработчик неудачного соединения (отключаем reactor)"""
@@ -80,7 +84,8 @@ class Connector(ClientFactory):
     def clientConnectionLost(self, connector, reason):
         """Обработчик отключения соединения (отключаем reactor)"""
 
-        print("Connection was lost")
+        print("Disconnected from the server")  # уведомление в консоли клиента
+        time.sleep(1)
         reactor.callFromThread(reactor.stop)
 
 
